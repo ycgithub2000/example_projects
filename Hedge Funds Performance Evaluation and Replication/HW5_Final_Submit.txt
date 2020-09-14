@@ -1,0 +1,188 @@
+# factor - FFactors
+# HFindex - HFIndex
+# endIndex - eps
+# numPeriods - NumMonths
+# indexSelected- ChosenIdx
+# alpha- Alphas
+# alpha_stdErr - AlphaSE
+# beta - Betas
+# beta_stdErr - BetaSE
+# R2_adj - AdjRsq
+# mod - submodel
+# beta_2- betaclone
+# fittedVal - FittedRet
+# R_estimate -Rhat
+# cumret_true - cumretOrig
+# cumret_clone - curetClon
+
+
+# setwd("/Users/")
+# install.packages("strucchange")
+library(strucchange)
+FFactors = read.csv("factordata.csv",header=TRUE)
+HFIndex = read.csv("HFIndex.csv",header=TRUE)
+
+# factor earliest start time: Feb 1990
+# length(FFactors[,"SP500"])
+FFactors = FFactors[12:286,]
+
+
+NumMonths = 275
+# Hedge Fund Index earliest start time: Jan 1991
+HFIndex = HFIndex[1:275,]
+eps = c(93,111,215)
+
+
+
+#chosen indexes: 10(index 6), 20(index 16), 30(index 26), 40(index36), 33(index 29)
+ChosenIdx = as.numeric(HFIndex[,10])
+# ChosenIdx = as.numeric(HFIndex[,20])
+# ChosenIdx = as.numeric(HFIndex[,30])
+# ChosenIdx = as.numeric(HFIndex[,40])
+# ChosenIdx = as.numeric(HFIndex[,33])
+
+#1
+#dummy variables
+
+D1 = matrix(0,NumMonths,1)
+
+D2 = matrix(0,NumMonths,1)
+D3 = matrix(0,NumMonths,1)
+D4 = matrix(0,NumMonths,1)
+D1[1:eps[1],] = 1
+
+D2[(eps[1]+1):eps[2],] = 1
+D3[(eps[2]+1):eps[3],] = 1 
+D4[(eps[3]+1):NumMonths,] = 1
+FFactors$D1 = D1
+FFactors$D2 = D2
+
+FFactors$D3 = D3
+FFactors$D4 = D4
+X = FFactors[,2:6]
+
+D1Xt = X
+D2Xt = X
+D3Xt = X
+D4Xt = X
+
+D1Xt[(eps[1]+1):NumMonths,] = 0
+D2Xt[c(1:eps[1],(eps[2]+1):NumMonths),] = 0
+D3Xt[c(1:eps[2],(eps[3]+1):NumMonths),] = 0
+D4Xt[1:eps[3],] = 0
+
+
+Alphas = matrix(0,4,1)
+
+AlphaSE = matrix(0,4,1)
+
+Betas = matrix(0,5,4)
+
+BetaSE = matrix(0,5,4)
+
+AdjRsq = matrix(0,1,4)
+
+
+for (i in 1:4){
+	if(i==1){
+		submodel = lm(ChosenIdx[1:eps[1]]~(as.matrix(FFactors[1:eps[1],2:6])))
+	}
+	if(i==2){
+		submodel = lm(ChosenIdx[(eps[1]+1):eps[2]]~(as.matrix(FFactors[(eps[1]+1):eps[2],2:6])))
+	}
+	if(i==3){
+		submodel = lm(ChosenIdx[(eps[2]+1):eps[3]]~(as.matrix(FFactors[(eps[2]+1):eps[3],2:6])))
+	}
+	if(i==4){
+		submodel = lm(ChosenIdx[(eps[3]+1):NumMonths]~(as.matrix(FFactors[(eps[3]+1):NumMonths,2:6])))
+	}
+	Alphas[i] = coef(summary(submodel))[, 1][1]
+
+	AlphaSE[i] = coef(summary(submodel))[, 2][1]
+	Betas[1:5,i] = coef(summary(submodel))[, 1][2:6]
+
+	BetaSE[1:5,i] = coef(summary(submodel))[, 2][2:6]
+	AdjRsq[i] = summary(submodel)$adj.r.squared
+	# summary(submodel)
+
+}
+Alphas
+Betas
+AlphaSE
+BetaSE
+AdjRsq
+tTest = sctest(ChosenIdx ~as.matrix(FFactors[,2:6]), type= "Nyblom-Hansen", point=3)
+
+tTest$p.value
+
+
+
+
+
+#2
+
+betaclone = matrix(0,5,4)
+FittedRet = matrix(0,NumMonths,1)
+for (i in 1:4){
+	if(i==1){
+		submodel = lm((ChosenIdx[1:eps[1]]-FFactors[1:eps[1],6])~0+(as.matrix(FFactors[1:eps[1],2:5]- FFactors[1:eps[1],6])))
+		FittedRet[1:eps[1]] = submodel$fitted.values+ FFactors[1:eps[1],6]
+	}
+	if(i==2){
+		submodel = lm((ChosenIdx[(eps[1]+1):eps[2]]- FFactors[(eps[1]+1):eps[2],6])~0+(as.matrix(FFactors[(eps[1]+1):eps[2],2:5]- FFactors[(eps[1]+1):eps[2],6])))
+		FittedRet[(eps[1]+1):eps[2]] = submodel$fitted.values+ FFactors[(eps[1]+1):eps[2],6]
+	}
+	if(i==3){
+		submodel = lm((ChosenIdx[(eps[2]+1):eps[3]]- FFactors[(eps[2]+1):eps[3],6])~0+(as.matrix(FFactors[(eps[2]+1):eps[3],2:5]-FFactors[(eps[2]+1):eps[3],6])))
+		FittedRet[(eps[2]+1):eps[3]]=submodel$fitted.values+FFactors[(eps[2]+1):eps[3],6]
+	}
+	if(i==4){
+		submodel = lm((ChosenIdx[(eps[3]+1):NumMonths]-FFactors[(eps[3]+1):NumMonths,6])~0+(as.matrix(FFactors[(eps[3]+1):NumMonths,2:5]-FFactors[(eps[3]+1):NumMonths,6])))
+		FittedRet[(eps[3]+1):NumMonths]=submodel$fitted.values+FFactors[(eps[3]+1):NumMonths,6]
+	}
+	betaclone[1:4,i]=coef(summary(submodel))[, 1][1:4]
+	betaclone[5,i]=1-sum(coef(summary(submodel))[, 1][1:4])
+}
+
+betaclone
+
+
+
+#c.i
+gamma = sqrt((ChosenIdx-mean(ChosenIdx))^2/(FittedRet-mean(FittedRet))^2)
+
+Rhat = matrix(0,NumMonths,1)
+
+for (i in 1:NumMonths){
+	Rhat[i] = gamma[i]*FittedRet[i]
+}
+gamma = sqrt(sum((ChosenIdx-mean(ChosenIdx))^2)/sum((FittedRet-mean(FittedRet))^2))
+Rhat = gamma*FittedRet
+delta = 1-gamma
+TBill = read.csv("TBill.csv",header=FALSE)
+R_hat = Rhat + delta*TBill[,3]
+# Annualized Amount
+mean(ChosenIdx)*12
+
+sd(ChosenIdx)*sqrt(12)
+mean(ChosenIdx)/sd(ChosenIdx)*sqrt(12)
+mean(R_hat)*12
+
+sd(R_hat)*sqrt(12)
+mean(R_hat)/sd(R_hat)*sqrt(12)
+
+
+# c.ii
+cumretOrig = matrix(0,NumMonths,1)
+curetClon = matrix(0,NumMonths,1)
+cumretOrig[1] = ChosenIdx[1]
+curetClon[1] =R_hat[1]
+for (i in 2:NumMonths) {
+	cumretOrig[i] = (1+cumretOrig[i-1])*(1+ChosenIdx[i])-1
+	curetClon[i] = (1+curetClon[i-1])*(1+R_hat[i])-1
+}
+plot(cumretOrig,ylim = c(-1,20),xlab = "Time", ylab = "Cumulative Return", xaxt = "n",col=1,type='l')
+plot(curetClon,xlab = "Time", ylab = "Cumulative Return", xaxt = "n",col=1,type='l')
+axis(1, at=seq(1,NumMonths,15), labels=FFactors[seq(1,NumMonths,15),1])
+lines(cumretOrig,col = 2)
+legend("topleft", legend=c("Linear Clone","Original"), col=1:2,lty=1,cex=1)
